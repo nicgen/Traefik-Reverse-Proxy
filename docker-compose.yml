@@ -1,0 +1,30 @@
+services:
+  traefik:
+    image: "traefik:v2.11"
+    container_name: "traefik_reverse_proxy"
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true" # Enables the Traefik dashboard (for local dev only)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge=true"
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL}" # Set your email in the .env file
+      - "--certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Traefik Dashboard Port
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    environment:
+      - "CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_API_TOKEN}" # Reads from .env file
+    networks:
+      - traefik_net
+
+networks:
+  traefik_net:
+    name: traefik_net

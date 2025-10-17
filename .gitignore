@@ -1,0 +1,5 @@
+# Ignore the .env file containing secrets
+.env
+
+# Ignore the Let's Encrypt certificates and account info
+letsencrypt/
