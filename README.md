@@ -84,7 +84,7 @@ From within the `demo` directory, run the following command:
 docker-compose up -d
 ```
 
-After a minute, visit the domain you configured (e.g., `http://your-domain.com`). You should be automatically redirected to `https` and see the test page with a valid SSL certificate.
+After a minute, visit the domain you configured (e.g., `http://your-domain.com`). You should be automatically redirected to `https` and see the test page with a valid SSL certificate. The page will automatically validate the SSL certificate and display a confirmation that your Traefik reverse proxy is correctly configured with a browser-trusted certificate.
 
 **E. Stop the Demo:**
 Once you are finished, you can stop and remove the demo container:

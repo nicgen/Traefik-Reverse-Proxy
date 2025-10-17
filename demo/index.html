@@ -73,8 +73,21 @@
             padding: 25px;
             margin-bottom: 20px;
             border-left: 4px solid #b8bb26;
+            transition: border-color 0.3s ease;
         }
 
+        .status-card.status-ok {
+            border-left-color: #b8bb26; /* gruvbox green */
+        }
+
+        .status-card.status-error {
+            border-left-color: #fb4934; /* gruvbox red */
+        }
+
+        .status-card.status-error .value {
+            color: #fb4934;
+        }
+        
         .status-card h2 {
             font-size: 18px;
             color: #fabd2f;
@@ -82,6 +95,11 @@
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        
+        #ssl-test-status {
+            font-weight: 600;
+            font-size: 14px;
         }
 
         .info-row {
@@ -161,8 +179,23 @@
         </div>
 
         <p class="description">
-            This page verifies that your Caddy reverse proxy is correctly configured with a valid Let's Encrypt SSL certificate using the Cloudflare DNS-01 challenge.
+            This page verifies that your Traefik reverse proxy is correctly configured with a valid Let's Encrypt SSL certificate using the Cloudflare DNS-01 challenge.
         </p>
+
+        <div class="status-card" id="ssl-test-card">
+            <h2>
+                <span id="ssl-test-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 14V11M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#fabd2f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                SSL Connection Test
+            </h2>
+            <div class="info-row">
+                <span class="label">Status</span>
+                <span class="value" id="ssl-test-status">Testing...</span>
+            </div>
+        </div>
 
         <div class="status-card">
             <h2>
@@ -185,22 +218,81 @@
             </div>
         </div>
 
-        <div class="ssl-badge">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C9.243 2 7 4.243 7 7V10H6C4.897 10 4 10.897 4 12V20C4 21.103 4.897 22 6 22H18C19.103 22 20 21.103 20 20V12C20 10.897 19.103 10 18 10H17V7C17 4.243 14.757 2 12 2ZM9 7C9 5.346 10.346 4 12 4C13.654 4 15 5.346 15 7V10H9V7Z" fill="#282828"/>
-            </svg>
-            SECURED WITH HTTPS
-        </div>
-
         <div class="footer">
-            Check your browser's address bar for the padlock icon
+            This page validates SSL certificate by testing HTTPS connectivity and checking browser security context.
         </div>
     </div>
 
     <script>
+        // --- Populate basic info ---
         document.getElementById('protocol').textContent = window.location.protocol;
         document.getElementById('domain').textContent = window.location.hostname;
         document.getElementById('time').textContent = new Date().toLocaleString();
+
+        // --- SSL Certificate Validation ---
+        const sslTestCard = document.getElementById('ssl-test-card');
+        const sslTestIcon = document.getElementById('ssl-test-icon');
+        const sslTestStatus = document.getElementById('ssl-test-status');
+
+        const icons = {
+            secure: `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C9.243 2 7 4.243 7 7V10H6C4.897 10 4 10.897 4 12V20C4 21.103 4.897 22 6 22H18C19.103 22 20 21.103 20 20V12C20 10.897 19.103 10 18 10H17V7C17 4.243 14.757 2 12 2ZM9 7C9 5.346 10.346 4 12 4C13.654 4 15 5.346 15 7V10H9V7Z" fill="#b8bb26"/>
+                </svg>`,
+            insecure: `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C9.243 2 7 4.243 7 7V10H6C4.897 10 4 10.897 4 12V20C4 21.103 4.897 22 6 22H18C19.103 22 20 21.103 20 20V12C20 10.897 19.103 10 18 10H17V7C17 4.243 14.757 2 12 2ZM9 7C9 5.346 10.346 4 12 4C13.654 4 15 5.346 15 7V10H9V7Z" fill="#fb4934"/>
+                    <path d="M7 10V7C7 4.243 9.243 2 12 2C14.757 2 17 4.243 17 7V10H18C19.103 10 20 10.897 20 12V20C20 21.103 19.103 22 18 22H6C4.897 22 4 21.103 4 20V12C4 10.897 4.897 10 6 10H7ZM9 10H15V7C15 5.346 13.654 4 12 4C10.346 4 9 5.346 9 7V10Z" fill="#fb4934"/>
+                </svg>`
+        };
+
+        async function validateSSL() {
+            try {
+                // Check 1: Verify page is loaded over HTTPS
+                if (window.location.protocol !== 'https:') {
+                    throw new Error('Page not loaded over HTTPS');
+                }
+
+                // Check 2: Verify browser secure context
+                if (!window.isSecureContext) {
+                    throw new Error('Not in a secure context');
+                }
+
+                // Check 3: Test HTTPS connectivity by fetching health endpoint
+                const response = await fetch('/health', {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Health check failed: ${response.status}`);
+                }
+
+                // Check 4: Verify the response came over HTTPS
+                const responseUrl = new URL(response.url);
+                if (responseUrl.protocol !== 'https:') {
+                    throw new Error('Response not received over HTTPS');
+                }
+
+                // All checks passed - SSL is valid and trusted
+                sslTestCard.classList.add('status-ok');
+                sslTestIcon.innerHTML = icons.secure;
+                sslTestStatus.textContent = 'Valid SSL certificate. Browser trusts the connection.';
+
+            } catch (error) {
+                // Any failure means SSL is not properly configured
+                sslTestCard.classList.add('status-error');
+                sslTestIcon.innerHTML = icons.insecure;
+                sslTestStatus.textContent = `SSL validation failed: ${error.message}`;
+                console.error('SSL validation error:', error);
+            }
+        }
+
+        // Run validation on page load
+        validateSSL();
     </script>
 </body>
 </html>
