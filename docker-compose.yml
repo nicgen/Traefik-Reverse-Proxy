@@ -1,30 +1,81 @@
 services:
+  # Docker Socket Proxy - Restricts Docker API access
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - socket_proxy_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - NETWORKS=0
+      - VOLUMES=0
+      - POST=1
+      - BUILD=0
+      - COMMIT=0
+      - EXEC=0
+      - INFO=1
+      - PING=1
+      - VERSION=1
+      - EVENTS=1
+      - LOG_LEVEL=info
+
   traefik:
     image: "traefik:v2.11"
     container_name: "traefik_reverse_proxy"
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     command:
-      - "--api.insecure=true" # Enables the Traefik dashboard (for local dev only)
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
       - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.cloudflare.acme.dnschallenge=true"
-      - "--certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare"
-      - "--certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL}" # Set your email in the .env file
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge.provider=${TRAEFIK_CERT_RESOLVER}"
+      - "--certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+      - "--providers.file.directory=/dynamic"
+    networks:
+      - "traefik_net"
+      - "socket_proxy_net"
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Traefik Dashboard Port
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./letsencrypt:/letsencrypt"
+      - "8080:8080"
     environment:
-      - "CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_API_TOKEN}" # Reads from .env file
-    networks:
-      - traefik_net
+      - "CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_API_TOKEN}"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "./dynamic:/dynamic"
+    depends_on:
+      - "docker-socket-proxy"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.priority=10"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:${TRAEFIK_ADMIN_AUTH}"
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
 
 networks:
   traefik_net:
     name: traefik_net
+    driver: bridge
+  socket_proxy_net:
+    name: socket_proxy_net
+    driver: bridge
+    internal: true
